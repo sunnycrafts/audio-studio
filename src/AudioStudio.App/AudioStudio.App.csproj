@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>AudioStudio</AssemblyName>
+    <RootNamespace>AudioStudio.App</RootNamespace>
+    <Version>0.3.1</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!--
+      WPF's native components (wpfgfx, PresentationNative, D3DCompiler, PenImc)
+      are excluded from ordinary single-file bundling and are left loose beside
+      the exe, so the app dies with a DllNotFoundException the moment it is moved
+      anywhere on its own. IncludeAllContentForSelfExtract bundles them too and
+      unpacks to a temp folder on launch, which is what makes the exe genuinely
+      portable. It costs a little extra time on first run only.
+    -->
+    <IncludeNativeLibrariesForSelfExtraction>true</IncludeNativeLibrariesForSelfExtraction>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="3.0.5" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AudioStudio.Core\AudioStudio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,650 @@
+<ui:FluentWindow x:Class="AudioStudio.App.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:controls="clr-namespace:AudioStudio.App.Controls"
+                 Title="AI Audio Restoration Studio"
+                 Width="1560" Height="960"
+                 MinWidth="1120" MinHeight="720"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Title bar -->
+        <ui:TitleBar Grid.Row="0" Title="AI Audio Restoration Studio" ShowMaximize="True">
+            <ui:TitleBar.Icon>
+                <ui:SymbolIcon Symbol="MusicNote224" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+
+        <!-- Command bar: one clear primary action, everything else secondary -->
+        <Border Grid.Row="1" Padding="16,4,16,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <ui:Button Command="{Binding PrimaryActionCommand}" Appearance="Primary"
+                               MinWidth="182" Height="38" FontWeight="SemiBold"
+                               Content="{Binding PrimaryActionLabel}"
+                               Icon="{ui:SymbolIcon Sparkle24}"
+                               ToolTip="The next step for this recording" />
+
+                    <ui:Button Command="{Binding OpenCommand}" Margin="10,0,0,0" Height="38"
+                               Content="Open" Icon="{ui:SymbolIcon FolderOpen24}"
+                               ToolTip="Open a recording (Ctrl+O)" />
+
+                    <ui:Button Command="{Binding AnalyzeCommand}" Margin="6,0,0,0" Height="38"
+                               Content="Re-inspect" Icon="{ui:SymbolIcon Stethoscope20}"
+                               ToolTip="Inspect the recording again (F5)" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ui:Button Command="{Binding PlayPauseCommand}" Width="42" Height="38"
+                               ToolTip="Play or pause (Space)">
+                        <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   Text="{Binding PlayPauseGlyph}" FontSize="14" />
+                    </ui:Button>
+
+                    <ui:Button Command="{Binding StopCommand}" Width="42" Height="38" Margin="6,0,0,0"
+                               ToolTip="Stop">
+                        <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   Text="&#xE71A;" FontSize="14" />
+                    </ui:Button>
+
+                    <TextBlock Text="{Binding PositionLabel}" VerticalAlignment="Center"
+                               Margin="14,0,14,0" FontFamily="Consolas,Cascadia Mono"
+                               FontSize="12" Opacity="0.75" />
+
+                    <ui:Button Command="{Binding ZoomOutCommand}" Width="40" Height="38"
+                               Icon="{ui:SymbolIcon ZoomOut24}" ToolTip="Zoom out" />
+                    <ui:Button Command="{Binding ZoomInCommand}" Width="40" Height="38" Margin="6,0,0,0"
+                               Icon="{ui:SymbolIcon ZoomIn24}" ToolTip="Zoom in" />
+                    <ui:Button Command="{Binding ZoomFitCommand}" Height="38" Margin="6,0,0,0"
+                               Content="Fit" ToolTip="Show the whole recording" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <ui:Button Command="{Binding UndoCommand}" Width="40" Height="38"
+                               Icon="{ui:SymbolIcon ArrowUndo24}" ToolTip="Undo (Ctrl+Z)" />
+                    <ui:Button Command="{Binding RedoCommand}" Width="40" Height="38" Margin="6,0,0,0"
+                               Icon="{ui:SymbolIcon ArrowRedo24}" ToolTip="Redo (Ctrl+Y)" />
+
+                    <ui:Button Command="{Binding ExportCommand}" Margin="10,0,0,0" Height="38"
+                               Content="Export" Icon="{ui:SymbolIcon Save24}"
+                               ToolTip="Export the repaired audio (Ctrl+E)" />
+
+                    <ui:Button Command="{Binding SaveReportCommand}" Margin="6,0,0,0" Height="38"
+                               Icon="{ui:SymbolIcon DocumentText24}"
+                               ToolTip="Save the verification report" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Environment warning -->
+        <ui:InfoBar Grid.Row="2" Margin="16,0,16,8" Severity="Warning"
+                    Title="FFmpeg is missing"
+                    Message="{Binding EnvironmentWarning}"
+                    IsClosable="False"
+                    IsOpen="{Binding HasEnvironmentWarning, Mode=OneWay}" />
+
+        <!-- Main content -->
+        <Grid Grid.Row="3" Margin="16,0,16,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="310" MinWidth="260" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" MinWidth="400" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="430" MinWidth="340" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: recording, diagnosis, changes -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <ui:Card Grid.Row="0" Padding="16,13">
+                    <StackPanel>
+                        <TextBlock Text="RECORDING" Style="{StaticResource SectionHeader}" />
+                        <TextBlock Text="{Binding FileNameLabel}" FontWeight="SemiBold"
+                                   FontSize="14" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding SourceSummary}" Style="{StaticResource Muted}"
+                                   FontSize="12" Margin="0,4,0,0" />
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- Diagnosis: a meter and a verdict, not a bare score out of 100 -->
+                <ui:Card Grid.Row="1" Margin="0,10,0,0" Padding="16,13"
+                         Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="RECORDING HEALTH" Style="{StaticResource SectionHeader}" />
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                            <TextBlock Text="{Binding HealthScore}" FontSize="38" FontWeight="Bold"
+                                       Foreground="{Binding HealthScore, Converter={StaticResource HealthToBrush}}" />
+                            <TextBlock Text="%" FontSize="19" Opacity="0.55"
+                                       VerticalAlignment="Bottom" Margin="2,0,0,8" />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding HealthMeter}" FontSize="15"
+                                   FontFamily="Consolas,Cascadia Mono" Margin="0,2,0,0"
+                                   Foreground="{Binding HealthScore, Converter={StaticResource HealthToBrush}}" />
+
+                        <TextBlock Text="{Binding HealthVerdict}" FontSize="13.5" FontWeight="SemiBold"
+                                   Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Foreground="{Binding HealthScore, Converter={StaticResource HealthToBrush}}" />
+
+                        <Border Height="1" Background="#20FFFFFF" Margin="0,12,0,10" />
+
+                        <Grid>
+                            <TextBlock Text="Diagnostic confidence" FontSize="12" Opacity="0.6" />
+                            <TextBlock Text="{Binding DiagnosisConfidence}" FontSize="12"
+                                       FontWeight="SemiBold" HorizontalAlignment="Right" />
+                        </Grid>
+                        <TextBlock Text="{Binding AnalysisMetaLabel}" FontSize="11"
+                                   Opacity="0.4" Margin="0,6,0,0" />
+                    </StackPanel>
+                </ui:Card>
+
+                <TabControl Grid.Row="2" Margin="0,10,0,0">
+                    <TabItem Header="Changes">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Margin="10,16"
+                                       Style="{StaticResource Muted}" FontSize="12"
+                                       Text="Nothing has been changed. The original recording stays untouched — every repair is a separate step here that you can switch off or undo."
+                                       Visibility="{Binding HasEdits, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                            <ListBox Grid.Row="0" ItemsSource="{Binding ChainNodes}"
+                                     HorizontalContentAlignment="Stretch"
+                                     Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     Visibility="{Binding HasEdits, Converter={StaticResource BoolToVisibility}}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4" Opacity="{Binding IsEnabled, Converter={StaticResource BoolToOpacity}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                           FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Description}" FontSize="11"
+                                                           Opacity="0.6" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            </StackPanel>
+
+                                            <ui:Button Grid.Column="1" Width="34" Height="30" Margin="6,0,0,0"
+                                                       Command="{Binding DataContext.ToggleNodeCommand,
+                                                                 RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       CommandParameter="{Binding}"
+                                                       Icon="{ui:SymbolIcon Eye24}"
+                                                       ToolTip="Switch this repair on or off to compare" />
+
+                                            <ui:Button Grid.Column="2" Width="34" Height="30" Margin="4,0,0,0"
+                                                       Command="{Binding DataContext.RemoveNodeCommand,
+                                                                 RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       CommandParameter="{Binding}"
+                                                       Icon="{ui:SymbolIcon Delete24}"
+                                                       ToolTip="Remove this repair" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <ui:Button Grid.Row="1" Margin="8" HorizontalAlignment="Stretch"
+                                       Command="{Binding RevertAllCommand}"
+                                       Content="Revert to the original"
+                                       Icon="{ui:SymbolIcon ArrowReset24}"
+                                       Visibility="{Binding HasEdits, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="History">
+                        <ListBox ItemsSource="{Binding HistoryEntries}"
+                                 Background="Transparent" BorderThickness="0"
+                                 HorizontalContentAlignment="Stretch">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,3">
+                                        <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding TimeLabel}" FontSize="10" Opacity="0.45" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </TabItem>
+
+                    <TabItem Header="Log">
+                        <ListBox ItemsSource="{Binding LogEntries}"
+                                 Background="Transparent" BorderThickness="0"
+                                 HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,2">
+                                        <TextBlock Text="{Binding TimeLabel}" FontSize="10" Opacity="0.45" />
+                                        <TextBlock Text="{Binding Json}" FontSize="11"
+                                                   FontFamily="Consolas,Cascadia Mono"
+                                                   TextWrapping="Wrap" Opacity="0.8" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                          Background="Transparent" />
+
+            <!-- Centre: diagnosis, treatment plan, then the displays -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- The diagnosis, in the engine's own voice -->
+                <ui:Card Grid.Row="0" Padding="18,15" Margin="0,0,0,10"
+                         Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="270" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                            <TextBlock Text="DIAGNOSIS" Style="{StaticResource SectionHeader}" />
+                            <TextBlock Text="{Binding ReportSummary}" TextWrapping="Wrap"
+                                       FontSize="13.5" LineHeight="21" />
+
+                            <Border Margin="0,12,0,0" Padding="11,8" CornerRadius="6"
+                                    Background="{StaticResource PanelTint}"
+                                    Visibility="{Binding HasVerification, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="VERIFICATION" Style="{StaticResource SectionHeader}" />
+                                    <TextBlock Text="{Binding VerificationHeadline}" TextWrapping="Wrap"
+                                               FontSize="12.5" Foreground="{StaticResource AccentSuccess}" />
+
+                                    <ItemsControl ItemsSource="{Binding LastVerification}" Margin="0,7,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                               FontSize="11.5" Opacity="0.7" />
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding BeforeLabel}" FontSize="11.5"
+                                                                   Opacity="0.5"
+                                                                   FontFamily="Consolas,Cascadia Mono" />
+                                                        <TextBlock Text=" → " FontSize="11.5" Opacity="0.4" />
+                                                        <TextBlock Text="{Binding AfterLabel}" FontSize="11.5"
+                                                                   FontWeight="SemiBold"
+                                                                   FontFamily="Consolas,Cascadia Mono"
+                                                                   Foreground="{Binding Converter={StaticResource MetricToBrush}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <Border Grid.Column="1" Width="1" Background="#1AFFFFFF" Margin="0,4,18,4" />
+
+                        <!-- Treatment plan: what the engine intends to do, in order -->
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0">
+                                <TextBlock Text="TREATMENT PLAN" Style="{StaticResource SectionHeader}" />
+                                <TextBlock Text="{Binding PlanHeadline}" FontSize="11.5"
+                                           Opacity="0.6" Margin="0,-2,0,8" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="1" Style="{StaticResource Muted}" FontSize="12"
+                                       Text="Nothing needs repairing."
+                                       Visibility="{Binding HasPlan, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                            <ItemsControl Grid.Row="1" ItemsSource="{Binding PlanSteps}"
+                                          Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,7">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0" FontSize="13" Margin="0,0,9,0"
+                                                       VerticalAlignment="Top"
+                                                       Text="{Binding State, Converter={StaticResource StepStateToGlyph}}"
+                                                       Foreground="{Binding State, Converter={StaticResource StepStateToBrush}}" />
+
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Title}" FontSize="12.5"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding StateLabel}" FontSize="10.5"
+                                                           Opacity="0.55"
+                                                           Foreground="{Binding State, Converter={StaticResource StepStateToBrush}}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <ui:Button Grid.Row="2" Margin="0,8,0,0" HorizontalAlignment="Stretch"
+                                       Appearance="Primary"
+                                       Command="{Binding ApplyPlanCommand}"
+                                       Content="Carry out this plan"
+                                       Icon="{ui:SymbolIcon Wand24}"
+                                       Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibility}}"
+                                       ToolTip="Applies every step in order, measuring each one" />
+                        </Grid>
+                    </Grid>
+                </ui:Card>
+
+                <ui:Card Grid.Row="1" Padding="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="2*" MinHeight="110" />
+                            <RowDefinition Height="6" />
+                            <RowDefinition Height="3*" MinHeight="110" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Padding="14,9,14,6">
+                            <Grid>
+                                <TextBlock Text="WAVEFORM AND SPECTROGRAM"
+                                           Style="{StaticResource SectionHeader}" Margin="0" />
+                                <TextBlock HorizontalAlignment="Right" FontSize="11" Opacity="0.45"
+                                           Text="Scroll to pan · Ctrl+scroll to zoom · click to seek" />
+                            </Grid>
+                        </Border>
+
+                        <controls:WaveformView x:Name="Waveform" Grid.Row="1"
+                                               Peaks="{Binding CurrentPeaks}"
+                                               ComparisonPeaks="{Binding ComparisonPeaks}"
+                                               ViewStart="{Binding ViewStart, Mode=TwoWay}"
+                                               ViewLength="{Binding ViewLength, Mode=TwoWay}"
+                                               Playhead="{Binding Playhead}"
+                                               Markers="{Binding Markers}"
+                                               WaveBrush="#5AA9E6"
+                                               ClipToBounds="True" />
+
+                        <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch"
+                                      Background="Transparent" />
+
+                        <controls:SpectrogramView x:Name="Spectrogram" Grid.Row="3"
+                                                  Samples="{Binding DisplaySamples}"
+                                                  SampleRate="{Binding DisplaySampleRate}"
+                                                  ViewStart="{Binding ViewStart}"
+                                                  ViewLength="{Binding ViewLength}"
+                                                  Playhead="{Binding Playhead}"
+                                                  ClipToBounds="True" />
+
+                        <Border Grid.Row="4" Padding="14,9">
+                            <Slider x:Name="ScrollSlider" Minimum="0"
+                                    Maximum="{Binding TotalDuration}"
+                                    Value="{Binding Playhead, Mode=OneWay}"
+                                    IsMoveToPointEnabled="True"
+                                    ValueChanged="OnScrollSliderChanged" />
+                        </Border>
+                    </Grid>
+                </ui:Card>
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Width="8" HorizontalAlignment="Stretch"
+                          Background="Transparent" />
+
+            <!-- Right: findings and inspector -->
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="2*" MinHeight="170" />
+                    <RowDefinition Height="8" />
+                    <RowDefinition Height="3*" MinHeight="210" />
+                </Grid.RowDefinitions>
+
+                <ui:Card Grid.Row="0" Padding="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Padding="16,13,16,6">
+                            <TextBlock Text="FINDINGS" Style="{StaticResource SectionHeader}" Margin="0" />
+                        </Border>
+
+                        <TextBlock Grid.Row="1" Margin="16,4,16,16" Style="{StaticResource Muted}"
+                                   FontSize="12"
+                                   Text="Nothing has been inspected yet. Open a recording and I will measure it and report what I find before changing anything."
+                                   Visibility="{Binding HasReport, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                        <ListBox Grid.Row="1" ItemsSource="{Binding Findings}"
+                                 SelectedItem="{Binding SelectedFinding, Mode=TwoWay}"
+                                 Background="Transparent" BorderThickness="0"
+                                 HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,7">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Severity reads first: a coloured dot, then the word -->
+                                        <TextBlock Grid.Column="0" FontSize="15" Margin="0,0,10,0"
+                                                   VerticalAlignment="Top"
+                                                   Text="{Binding Severity, Converter={StaticResource SeverityToGlyph}}"
+                                                   Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding SeverityLabel}" FontSize="10.5"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                       FontSize="13.5" TextWrapping="Wrap" Margin="0,1,0,0" />
+                                            <TextBlock Text="{Binding LocationLabel}" FontSize="11.5"
+                                                       Opacity="0.55" TextTrimming="CharacterEllipsis"
+                                                       Margin="0,2,0,0" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="2" Text="{Binding ConfidencePercent}"
+                                                   FontSize="12" Opacity="0.5" VerticalAlignment="Top"
+                                                   Margin="8,0,0,0" ToolTip="How confident I am this is real" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </ui:Card>
+
+                <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch"
+                              Background="Transparent" />
+
+                <ui:Card Grid.Row="2" Padding="0">
+                    <Grid>
+                        <TextBlock Margin="16" Style="{StaticResource Muted}" FontSize="12"
+                                   Text="Select a finding to see the diagnosis, the measurements behind it, and what I can do about it."
+                                   Visibility="{Binding HasSelectedFinding, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,13"
+                                      DataContext="{Binding SelectedFinding}"
+                                      Visibility="{Binding DataContext.HasSelectedFinding,
+                                                   RelativeSource={RelativeSource AncestorType=Window},
+                                                   Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Border CornerRadius="4" Padding="8,2"
+                                            Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}">
+                                        <TextBlock Text="{Binding SeverityLabel}" FontSize="11"
+                                                   FontWeight="SemiBold" Foreground="#101216" />
+                                    </Border>
+                                    <TextBlock Text="{Binding ConfidencePercent}" Margin="10,0,0,0"
+                                               FontSize="12" VerticalAlignment="Center" Opacity="0.8" />
+                                    <TextBlock Text="confidence" Margin="4,0,0,0" FontSize="12"
+                                               VerticalAlignment="Center" Opacity="0.45" />
+                                </StackPanel>
+
+                                <TextBlock Text="DIAGNOSIS" Style="{StaticResource SectionHeader}"
+                                           Margin="0,16,0,6" />
+                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap"
+                                           FontSize="13" LineHeight="20" />
+
+                                <StackPanel Margin="0,14,0,0"
+                                            Visibility="{Binding ProbableCause, Converter={StaticResource NullToVisibility}}">
+                                    <TextBlock Text="PROBABLE CAUSE" Style="{StaticResource SectionHeader}" />
+                                    <TextBlock Text="{Binding ProbableCause}" TextWrapping="Wrap"
+                                               FontSize="12.5" Opacity="0.85" LineHeight="19" />
+                                </StackPanel>
+
+                                <StackPanel Margin="0,14,0,0"
+                                            Visibility="{Binding SuggestedStrategy, Converter={StaticResource NullToVisibility}}">
+                                    <TextBlock Text="TREATMENT STRATEGY" Style="{StaticResource SectionHeader}" />
+                                    <TextBlock Text="{Binding SuggestedStrategy}" TextWrapping="Wrap"
+                                               FontSize="12.5" Opacity="0.85" LineHeight="19" />
+                                </StackPanel>
+
+                                <StackPanel Margin="0,16,0,0">
+                                    <TextBlock Text="MEASUREMENTS" Style="{StaticResource SectionHeader}" />
+                                    <ItemsControl ItemsSource="{Binding Evidence}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2.5">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" Opacity="0.75" />
+                                                        <TextBlock Text="{Binding Note}" FontSize="10.5" Opacity="0.42"
+                                                                   TextWrapping="Wrap"
+                                                                   Visibility="{Binding Note, Converter={StaticResource NullToVisibility}}" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                                               FontSize="12.5" FontWeight="SemiBold"
+                                                               FontFamily="Consolas,Cascadia Mono"
+                                                               VerticalAlignment="Top" Margin="10,0,0,0" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <Border Margin="0,18,0,0" Padding="14" CornerRadius="7"
+                                        Background="{StaticResource PanelTint}">
+                                    <StackPanel>
+                                        <TextBlock Text="REPAIR" Style="{StaticResource SectionHeader}" />
+
+                                        <TextBlock Style="{StaticResource Muted}" FontSize="12"
+                                                   Text="{Binding DataContext.NoSuggestionsReason,
+                                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                                   Visibility="{Binding DataContext.HasSuggestions,
+                                                                RelativeSource={RelativeSource AncestorType=Window},
+                                                                Converter={StaticResource InverseBoolToVisibility}}" />
+
+                                        <ItemsControl ItemsSource="{Binding DataContext.Suggestions,
+                                                      RelativeSource={RelativeSource AncestorType=Window}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,2,0,12">
+                                                        <TextBlock Text="{Binding Title}" FontSize="13.5"
+                                                                   FontWeight="SemiBold" TextWrapping="Wrap" />
+
+                                                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                                            <Border CornerRadius="3" Padding="6,1"
+                                                                    Background="#22FFFFFF">
+                                                                <TextBlock Text="{Binding SafetyLabel}"
+                                                                           FontSize="10.5" Opacity="0.85" />
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <TextBlock Text="{Binding Rationale}" TextWrapping="Wrap"
+                                                                   FontSize="12" Opacity="0.8" LineHeight="18"
+                                                                   Margin="0,7,0,0" />
+
+                                                        <TextBlock Text="{Binding Method}" TextWrapping="Wrap"
+                                                                   FontSize="10.5" Opacity="0.4"
+                                                                   Margin="0,5,0,7"
+                                                                   ToolTip="The technique used, if you want to know" />
+
+                                                        <ui:Button Appearance="Primary"
+                                                                   HorizontalAlignment="Stretch"
+                                                                   Content="Apply this repair"
+                                                                   Icon="{ui:SymbolIcon Wand24}"
+                                                                   Command="{Binding DataContext.ApplySuggestionCommand,
+                                                                             RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                   CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </ui:Card>
+            </Grid>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border Grid.Row="4" Padding="18,9" Background="#14000000">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                <ProgressBar Grid.Column="1" Width="230" Height="4"
+                             Value="{Binding Progress, Mode=OneWay}" Maximum="100"
+                             VerticalAlignment="Center"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>
